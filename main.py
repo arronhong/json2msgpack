@@ -5,13 +5,16 @@ import argparse
 import sys
 import io
 from typing import Generator
-from textwrap import wrap
 
 
 MIN_POSITIVE_FIXINT_FIRST_BYTE = b'\x00'
+MAX_POSITIVE_FIXINT_FIRST_BYTE = b'\x7F'
 MIN_FIXMAP_FIRST_BYTE = b'\x80'
+MAX_FIXMAP_FIRST_BYTE = b'\x8F'
 MIN_FIXARRAY_FIRST_BYTE = b'\x90'
+MAX_FIXARRAY_FIRST_BYTE = b'\x9F'
 MIN_FIXSTR_FIRST_BYTE = b'\xA0'
+MAX_FIXSTR_FIRST_BYTE = b'\xBF'
 NIL_FIRST_BYTE = b'\xC0'
 FALSE_FIRST_BYTE = b'\xC2'
 TRUE_FIRST_BYTE = b'\xC3'
@@ -33,6 +36,47 @@ ARRAY32_FIRST_BYTE = b'\xDD'
 MAP16_FIRST_BYTE = b'\xDE'
 MAP32_FIRST_BYTE = b'\xDF'
 MIN_NEGATIVE_FIXINT_FIRST_BYTE = b'\xE0'
+MAX_NEGATIVE_FIXINT_FIRST_BYTE = b'\xFF'
+
+
+def is_positive_fixint(b: bytes) -> bool:
+    min = MIN_POSITIVE_FIXINT_FIRST_BYTE[0]
+    max = MAX_POSITIVE_FIXINT_FIRST_BYTE[0]
+    if (0xFF - (max - min)) & b[0] == min:
+        return True
+    return False
+
+
+def is_negative_fixint(b: bytes) -> bool:
+    min = MIN_NEGATIVE_FIXINT_FIRST_BYTE[0]
+    max = MAX_NEGATIVE_FIXINT_FIRST_BYTE[0]
+    if (0xFF - (max - min)) & b[0] == min:
+        return True
+    return False
+
+
+def is_fixmap(b: bytes) -> bool:
+    min = MIN_FIXMAP_FIRST_BYTE[0]
+    max = MAX_FIXMAP_FIRST_BYTE[0]
+    if (0xFF - (max - min)) & b[0] == min:
+        return True
+    return False
+
+
+def is_fixarray(b: bytes) -> bool:
+    min = MIN_FIXARRAY_FIRST_BYTE[0]
+    max = MAX_FIXARRAY_FIRST_BYTE[0]
+    if (0xFF - (max - min)) & b[0] == min:
+        return True
+    return False
+
+
+def is_fixstr(b: bytes) -> bool:
+    min = MIN_FIXSTR_FIRST_BYTE[0]
+    max = MAX_FIXSTR_FIRST_BYTE[0]
+    if (0xFF - (max - min)) & b[0] == min:
+        return True
+    return False
 
 
 def pack_nil() -> bytes:
@@ -44,10 +88,9 @@ def pack_bool(b: bool) -> bytes:
 
 
 def pack_int(i: int) -> bytes:
-    if 0 <= i <= 0x7F:
-        return struct.pack(
-            "B", int.from_bytes(MIN_POSITIVE_FIXINT_FIRST_BYTE, 'big') | i)
-    elif 0x80 <= i <= 0xFF:
+    if 0 <= i <= MAX_POSITIVE_FIXINT_FIRST_BYTE[0]:
+        return struct.pack("B", i)
+    elif MAX_POSITIVE_FIXINT_FIRST_BYTE[0] < i <= 0xFF:
         return struct.pack(">cB", UINT8_FIRST_BYTE, i)
     elif 0xFF < i <= 0xFFFF:
         return struct.pack(">cH", UINT16_FIRST_BYTE, i)
@@ -55,10 +98,9 @@ def pack_int(i: int) -> bytes:
         return struct.pack(">cI", UINT32_FIRST_BYTE, i)
     elif 0xFFFFFFFF < i <= 0xFFFFFFFFFFFFFFFF:
         return struct.pack(">cQ", UINT64_FIRST_BYTE, i)
-    elif -0x20 <= i < 0:
-        return struct.pack(
-            'b', int.from_bytes(MIN_NEGATIVE_FIXINT_FIRST_BYTE, 'big') | i)
-    elif -0x80 <= i < -0x20:
+    elif struct.unpack('b', MIN_NEGATIVE_FIXINT_FIRST_BYTE)[0] <= i < 0:
+        return struct.pack('b', i)
+    elif -0x80 <= i < struct.unpack('b', MIN_NEGATIVE_FIXINT_FIRST_BYTE)[0]:
         return struct.pack(">cb", INT8_FIRST_BYTE, i)
     elif -0x8000 <= i < -0x80:
         return struct.pack(">ch", INT16_FIRST_BYTE, i)
@@ -80,9 +122,8 @@ def pack_float(f: float, single_precision=False):
 
 
 def pack_str_header(strlen: int) -> bytes:
-    if strlen <= 0x1F:
-        return struct.pack(
-            'B', int.from_bytes(MIN_FIXSTR_FIRST_BYTE, 'big') | strlen)
+    if strlen <= MAX_FIXSTR_FIRST_BYTE[0] - MIN_FIXSTR_FIRST_BYTE[0]:
+        return struct.pack('B', MIN_FIXSTR_FIRST_BYTE[0] + strlen)
     elif 0x1F < strlen <= 0xFF:
         return struct.pack('>cB', STR8_FIRST_BYTE, strlen)
     elif 0xFF < strlen <= 0xFFFF:
@@ -94,9 +135,8 @@ def pack_str_header(strlen: int) -> bytes:
 
 
 def pack_array_header(arrlen: int) -> bytes:
-    if arrlen <= 0x0F:
-        return struct.pack(
-            'B', int.from_bytes(MIN_FIXARRAY_FIRST_BYTE, 'big') | arrlen)
+    if arrlen <= MAX_FIXARRAY_FIRST_BYTE[0] - MIN_FIXARRAY_FIRST_BYTE[0]:
+        return struct.pack('B', MIN_FIXARRAY_FIRST_BYTE[0] + arrlen)
     elif 0xFF < arrlen <= 0xFFFF:
         return struct.pack('>cH', ARRAY16_FIRST_BYTE, arrlen)
     elif 0xFFFF < arrlen <= 0xFFFFFFFF:
@@ -107,9 +147,8 @@ def pack_array_header(arrlen: int) -> bytes:
 
 
 def pack_map_header(maplen: int) -> bytes:
-    if maplen <= 0x0F:
-        return struct.pack(
-            'B', int.from_bytes(MIN_FIXMAP_FIRST_BYTE, 'big') | maplen)
+    if maplen <= MAX_FIXMAP_FIRST_BYTE[0] - MIN_FIXMAP_FIRST_BYTE[0]:
+        return struct.pack('B', MIN_FIXMAP_FIRST_BYTE[0] + maplen)
     elif 0xFF < maplen <= 0xFFFF:
         return struct.pack('>cH', MAP16_FIRST_BYTE, maplen)
     elif 0xFFFF < maplen <= 0xFFFFFFFF:
@@ -149,44 +188,189 @@ def _pack_obj(obj) -> Generator[bytes, None, None]:
 
 
 def json_to_msgpack(j: str) -> bytes:
+    # TODO: enhancement for large json
     obj = json.loads(j)
     return b''.join(_pack_obj(obj))
+
+
+def _unpack_to_json(stream: io.BufferedIOBase, buffer_can_be_empty=True
+                    ) -> Generator[str, None, None]:
+    if (b := stream.read(1)) == b'':
+        # eof
+        if buffer_can_be_empty:
+            return
+        else:
+            raise ValueError('buffer shortage')
+
+    def read_with_check(wanted):
+        avail = stream.read(wanted)
+        if len(avail) != wanted:
+            raise ValueError('buffer shortage')
+        return avail
+
+    def is_serialized_json_str(s: str):
+        return len(s) >= 2 and s.startswith('"') and s.endswith('"')
+
+    def unpack_array(datalen):
+        yield '['
+        for i in range(datalen):
+            yield from _unpack_to_json(stream, buffer_can_be_empty=False)
+            if i < datalen - 1:
+                yield ','
+        yield ']'
+
+    def unpack_map(datalen):
+        yield '{'
+        for i in range(datalen*2):
+            if i & 1 == 0:
+                key_gen = _unpack_to_json(stream, buffer_can_be_empty=False)
+                key = next(key_gen)
+                if not is_serialized_json_str(key):
+                    raise ValueError('key of map in json only be string')
+                yield key
+                yield ':'
+            else:
+                yield from _unpack_to_json(stream, buffer_can_be_empty=False)
+                if i < datalen * 2 - 1:
+                    yield ','
+        yield '}'
+
+    if b == NIL_FIRST_BYTE:
+        yield 'null'
+    elif b == FALSE_FIRST_BYTE:
+        yield 'false'
+    elif b == TRUE_FIRST_BYTE:
+        yield 'true'
+    elif is_positive_fixint(b):
+        yield str(b[0])
+    elif b == UINT8_FIRST_BYTE:
+        yield str(struct.unpack('B', read_with_check(1))[0])
+    elif b == UINT16_FIRST_BYTE:
+        yield str(struct.unpack('>H', read_with_check(2))[0])
+    elif b == UINT32_FIRST_BYTE:
+        yield str(struct.unpack('>I', read_with_check(4))[0])
+    elif b == UINT64_FIRST_BYTE:
+        yield str(struct.unpack('>Q', read_with_check(4))[0])
+    elif is_negative_fixint(b):
+        yield str(struct.unpack('b', b)[0])
+    elif b == INT8_FIRST_BYTE:
+        yield str(struct.unpack('b', read_with_check(1))[0])
+    elif b == INT16_FIRST_BYTE:
+        yield str(struct.unpack('>h', read_with_check(2))[0])
+    elif b == INT32_FIRST_BYTE:
+        yield str(struct.unpack('>i', read_with_check(4))[0])
+    elif b == INT64_FIRST_BYTE:
+        yield str(struct.unpack('>q', read_with_check(8))[0])
+    elif b == FLOAT32_FIRST_BYTE:
+        yield str(struct.unpack('>f', read_with_check(4))[0])
+    elif b == FLOAT64_FIRST_BYTE:
+        yield str(struct.unpack('>d', read_with_check(8))[0])
+    elif is_fixstr(b):
+        datalen = (MAX_FIXSTR_FIRST_BYTE[0] - MIN_FIXSTR_FIRST_BYTE[0]) & b[0]
+        yield '"' + read_with_check(datalen).decode('utf-8') + '"'
+    elif b == STR8_FIRST_BYTE:
+        datalen = struct.unpack('B', read_with_check(1))[0]
+        yield '"' + read_with_check(datalen).decode('utf-8') + '"'
+    elif b == STR16_FIRST_BYTE:
+        datalen = struct.unpack('>H', read_with_check(2))[0]
+        yield '"' + read_with_check(datalen).decode('utf-8') + '"'
+    elif b == STR32_FIRST_BYTE:
+        datalen = struct.unpack('>I', read_with_check(4))[0]
+        yield '"' + read_with_check(datalen).decode('utf-8') + '"'
+    elif is_fixarray(b):
+        datalen = (MAX_FIXARRAY_FIRST_BYTE[0] - MIN_FIXARRAY_FIRST_BYTE[0]
+                   ) & b[0]
+        yield from unpack_array(datalen)
+    elif b == ARRAY16_FIRST_BYTE:
+        datalen = struct.unpack('>H', read_with_check(2))[0]
+        yield from unpack_array(datalen)
+    elif b == ARRAY32_FIRST_BYTE:
+        datalen = struct.unpack('>I', read_with_check(4))[0]
+        yield from unpack_array(datalen)
+    elif is_fixmap(b):
+        datalen = (MAX_FIXMAP_FIRST_BYTE[0] - MIN_FIXMAP_FIRST_BYTE[0]
+                   ) & b[0]
+        yield from unpack_map(datalen)
+    elif b == MAP16_FIRST_BYTE:
+        datalen = struct.unpack('>H', read_with_check(2))[0]
+        yield from unpack_map(datalen)
+    elif b == MAP32_FIRST_BYTE:
+        datalen = struct.unpack('>I', read_with_check(4))[0]
+        yield from unpack_map(datalen)
+    else:
+        raise ValueError(
+            'type of messagepack is not supported by json')
+
+
+def msgpack_to_json(stream: io.BufferedIOBase) -> str:
+    return ''.join(_unpack_to_json(stream))
+
+
+def _main(input, output, unpack=False):
+    if unpack:
+        if input is sys.stdin:
+            # format be like:
+            # AB 68 65 6C 6C 6F 20 77 6F 72 6C 64
+            stream = io.BytesIO(bytes.fromhex(input.readline()))
+        else:
+            stream = input
+
+        for unpack_json in _unpack_to_json(stream):
+            output.write(unpack_json)
+
+    else:
+        from textwrap import wrap
+        if input is sys.stdin:
+            json_str = input.readline()
+        else:
+            json_str = input.read()
+
+        if len(json_str) <= io.DEFAULT_BUFFER_SIZE:
+            # if data is relatively small, just load packed result into memory.
+            packed_result = json_to_msgpack(json_str)
+            if output is sys.stdout:
+                output.write(' '.join(wrap(packed_result.hex(), 2)))
+            else:
+                output.write(packed_result)
+        else:
+            for packed_obj in _pack_obj(json.loads(json_str)):
+                if output is sys.stdout:
+                    output.write(' '.join(wrap(packed_obj.hex(), 2)) + ' ')
+                else:
+                    output.write(packed_obj)
+
+    input.close()
+    output.close()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='JSON Messagepack Convert')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--unpack', '-u',
+                       action='store_true',
+                       help='convert messagepack to json')
     parser.add_argument('--output', '-o',
-                        type=argparse.FileType(mode='bw',
-                                               bufsize=io.DEFAULT_BUFFER_SIZE),
                         nargs='?',
                         default=sys.stdout,
                         help='Write to FILE instead of stdout')
     parser.add_argument('input',
-                        type=argparse.FileType(mode='r',
-                                               bufsize=io.DEFAULT_BUFFER_SIZE),
                         nargs='?',
                         default=sys.stdin,
                         help='If file is a single dash `-` or absent, reads from the stdin')
     args = parser.parse_args()
-
-    if args.input is sys.stdin:
-        json_str = args.input.readline()
-    else:
-        json_str = args.input.read()
-
-    if len(json_str) <= io.DEFAULT_BUFFER_SIZE:
-        packed_result = json_to_msgpack(json_str)
-        if args.output is sys.stdout:
-            args.output.write(' '.join(wrap(packed_result.hex(), 2)))
+    if isinstance(args.input, str):
+        if args.input == '-':
+            args.input = sys.stdin
+        elif args.unpack:
+            args.input = open(args.input, 'rb')
         else:
-            args.output.write(packed_result)
-    else:
-        for packed_obj in _pack_obj(json.loads(json_str)):
-            if args.output is sys.stdout:
-                args.output.write(' '.join(wrap(packed_obj.hex(), 2)) + ' ')
-            else:
-                args.output.write(packed_obj)
+            args.input = open(args.input, 'r')
 
-    args.input.close()
-    args.output.close()
+    if isinstance(args.output, str):
+        if args.unpack:
+            args.output = open(args.output, 'w')
+        else:
+            args.output = open(args.output, 'wb')
+
+    _main(args.input, args.output, args.unpack)
