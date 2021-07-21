@@ -41,4 +41,5 @@ python main.py -u -o json_file.txt packed_bin
 ```
 
 ## Note
+* not compatible to python 2
 * When serialize float object into bytes in messagepack, float object is serialized with double precision.
