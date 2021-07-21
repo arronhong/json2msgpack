@@ -1,7 +1,6 @@
 import json
 import struct
 import math
-import argparse
 import sys
 import io
 from typing import Generator
@@ -344,6 +343,7 @@ def _main(input, output, unpack=False):
 
 
 if __name__ == '__main__':
+    import argparse
     parser = argparse.ArgumentParser(
         description='JSON Messagepack Convert')
     group = parser.add_mutually_exclusive_group()
