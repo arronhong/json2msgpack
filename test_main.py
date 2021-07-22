@@ -10,6 +10,10 @@ from main import (
     pack_map_header,
     json_to_msgpack,
     is_positive_fixint,
+    is_fixstr,
+    is_fixarray,
+    is_fixmap,
+    is_negative_fixint,
     msgpack_to_json
 )
 
@@ -88,6 +92,38 @@ def test_json_to_msgpack(input, expected):
 ])
 def test_is_positive_fixint(input, expected):
     assert expected == is_positive_fixint(input)
+
+
+@pytest.mark.parametrize('input,expected', [
+    (b'\xE0', True),
+    (b'\xDF', False)
+])
+def test_is_negative_fixint(input, expected):
+    assert expected == is_negative_fixint(input)
+
+
+@pytest.mark.parametrize('input,expected', [
+    (b'\x8F', True),
+    (b'\x90', False)
+])
+def test_is_fixmap(input, expected):
+    assert expected == is_fixmap(input)
+
+
+@pytest.mark.parametrize('input,expected', [
+    (b'\x9F', True),
+    (b'\xA0', False)
+])
+def test_is_fixarray(input, expected):
+    assert expected == is_fixarray(input)
+
+
+@pytest.mark.parametrize('input,expected', [
+    (b'\xA0', True),
+    (b'\xCF', False)
+])
+def test_is_fixstr(input, expected):
+    assert expected == is_fixstr(input)
 
 
 @pytest.mark.parametrize('expected,input', [

@@ -4,6 +4,7 @@ import math
 import sys
 import io
 from typing import Generator
+from functools import partial
 
 
 MIN_POSITIVE_FIXINT_FIRST_BYTE = b'\x00'
@@ -38,44 +39,27 @@ MIN_NEGATIVE_FIXINT_FIRST_BYTE = b'\xE0'
 MAX_NEGATIVE_FIXINT_FIRST_BYTE = b'\xFF'
 
 
-def is_positive_fixint(b: bytes) -> bool:
-    min = MIN_POSITIVE_FIXINT_FIRST_BYTE[0]
-    max = MAX_POSITIVE_FIXINT_FIRST_BYTE[0]
-    if (0xFF - (max - min)) & b[0] == min:
+def _is_byte_in_range(b: bytes, low: bytes, high: bytes) -> bool:
+    if (0xFF - (high[0] - low[0])) & b[0] == low[0]:
         return True
     return False
 
 
-def is_negative_fixint(b: bytes) -> bool:
-    min = MIN_NEGATIVE_FIXINT_FIRST_BYTE[0]
-    max = MAX_NEGATIVE_FIXINT_FIRST_BYTE[0]
-    if (0xFF - (max - min)) & b[0] == min:
-        return True
-    return False
-
-
-def is_fixmap(b: bytes) -> bool:
-    min = MIN_FIXMAP_FIRST_BYTE[0]
-    max = MAX_FIXMAP_FIRST_BYTE[0]
-    if (0xFF - (max - min)) & b[0] == min:
-        return True
-    return False
-
-
-def is_fixarray(b: bytes) -> bool:
-    min = MIN_FIXARRAY_FIRST_BYTE[0]
-    max = MAX_FIXARRAY_FIRST_BYTE[0]
-    if (0xFF - (max - min)) & b[0] == min:
-        return True
-    return False
-
-
-def is_fixstr(b: bytes) -> bool:
-    min = MIN_FIXSTR_FIRST_BYTE[0]
-    max = MAX_FIXSTR_FIRST_BYTE[0]
-    if (0xFF - (max - min)) & b[0] == min:
-        return True
-    return False
+is_positive_fixint = partial(_is_byte_in_range,
+                             low=MIN_POSITIVE_FIXINT_FIRST_BYTE,
+                             high=MAX_POSITIVE_FIXINT_FIRST_BYTE)
+is_negative_fixint = partial(_is_byte_in_range,
+                             low=MIN_NEGATIVE_FIXINT_FIRST_BYTE,
+                             high=MAX_NEGATIVE_FIXINT_FIRST_BYTE)
+is_fixmap = partial(_is_byte_in_range,
+                    low=MIN_FIXMAP_FIRST_BYTE,
+                    high=MAX_FIXMAP_FIRST_BYTE)
+is_fixarray = partial(_is_byte_in_range,
+                    low=MIN_FIXARRAY_FIRST_BYTE,
+                    high=MAX_FIXARRAY_FIRST_BYTE)
+is_fixstr = partial(_is_byte_in_range,
+                    low=MIN_FIXSTR_FIRST_BYTE,
+                    high=MAX_FIXSTR_FIRST_BYTE)
 
 
 def pack_nil() -> bytes:
